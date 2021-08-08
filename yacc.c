@@ -1,7 +1,7 @@
 // An implementation of yacc based on
 // https://c9x.me/git/miniyacc.git/tree/yacc.c
 //
-// To undestand the implementation you must read https://c9x.me/yacc/.
+// To understand the implementation you must read https://c9x.me/yacc/.
 //
 // To port to janet we have made a few changes:
 //
@@ -860,7 +860,7 @@ parserules(int32_t nrules, const Janet *rules) {
         for (k = 0; k < npat; k++) {
           if (janet_symeq(pat[k], "%prec")) {
             if (k+1 == npat
-                || (s=findsy(pat[k], 0))>=ntk)
+                || (s=findsy(pat[k+1], 0))>=ntk)
               janet_panic("token expected after %prec");
             r->prec = is[s].prec;
             k++;
