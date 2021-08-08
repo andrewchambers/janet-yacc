@@ -1,11 +1,15 @@
 // An implementation of yacc based on
 // https://c9x.me/git/miniyacc.git/tree/yacc.c
 //
-// To stand any chance of understanding the implementation
-// you must read https://c9x.me/yacc/ .
-// Most code is unchanged, but the parser is now walking
-// janet data structures, we have also added a few new output
-// tables yyfns and yytrns now maps janet keywords to token numbers.
+// To undestand the implementation you must read https://c9x.me/yacc/.
+//
+// To port to janet we have made a few changes:
+//
+// - The parser is now walking janet data structures instead of parsing text.
+// - All allocation uses the janet scratch allocator.
+// - We abort using janet panics.
+// - Added a new output table yyfns to map action numbers to functions.
+// - Changed the purpose of yytrn to map janet keywords to token numbes.
 
 #include <janet.h>
 

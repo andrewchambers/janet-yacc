@@ -17,8 +17,12 @@
   [text]
   (peg/match lexer-peg text))
 
-# Define our  grammar.
-
+# Define our yacc grammar, it operates on the tokens produced by our lexer above.
+# To understand the example, it will help to make yourself familiar with yacc by reading
+# examples for other yacc tools.
+#
+# In our yacc non-terminals are represented by symbols and terminal tokens are represented
+# by :keywords.
 (def calculator-grammar
   ~(yacc
      (%left :+ :-)
