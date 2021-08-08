@@ -23,7 +23,7 @@ Example:
 
 (def tokens (lex prog))
 
-# Uncomment to see debug state.
+# Uncomment to see debug output.
 # (setdyn :yydbg stderr)
 
 # Optionally precompile.

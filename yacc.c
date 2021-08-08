@@ -686,8 +686,8 @@ static Janet
 tblout()
 {
   int *o, n;
-  Janet *yyfns;
-  JanetKV *sout, *yytrns;
+  Janet *fns;
+  JanetKV *sout, *trns;
 
   sout = janet_struct_begin(12);
 
@@ -727,27 +727,27 @@ tblout()
   aout(sout, "yyact", act, actsz);
   aout(sout, "yychk", chk, actsz);
 
-  yytrns = janet_struct_begin(ntk-1);
+  trns = janet_struct_begin(ntk-1);
   for (n=1; n<ntk; n++)
     janet_struct_put(
-      yytrns,
+      trns,
       janet_ckeywordv(is[n].name),
       janet_wrap_integer(n)
     );
   janet_struct_put(
     sout, 
     janet_ckeywordv("yytrns"),
-    janet_wrap_struct(janet_struct_end(yytrns))
+    janet_wrap_struct(janet_struct_end(trns))
   );
 
-  yyfns = janet_tuple_begin(nrl);
+  fns = janet_tuple_begin(nrl);
   for (n=0; n<nrl; n++) {
-    yyfns[n] = rs[n].act;
+    fns[n] = rs[n].act;
   }
   janet_struct_put(
     sout, 
     janet_ckeywordv("yyfns"),
-    janet_wrap_tuple(janet_tuple_end(yyfns))
+    janet_wrap_tuple(janet_tuple_end(fns))
   );
 
   return janet_wrap_struct(janet_struct_end(sout));
@@ -766,7 +766,7 @@ findsy(Janet v, int add)
     istok = 1;
     name = (char*)janet_unwrap_keyword(v);
   } else {
-    janet_panicf("tokens and non-terminals must be keywords and symbols respectively, got %v", v);
+    janet_panicf("tokens and non-terminals must be keywords and symbols respectively, got %p", v);
   }
 
   if (janet_string_length(name) >= IdntSz)
@@ -800,14 +800,11 @@ addtok(Janet v, int p, int a) {
   Info *si;
   int n;
 
+  if (!janet_checktype(v, JANET_KEYWORD))
+    janet_panicf("tokens must be keywords, got %v", v);
+
   n = findsy(v, 0);
-  if (n>=MaxTk && n<nsy)
-    janet_panic("non-terminal redeclared as token");
-  if (n==nsy) {
-    if (ntk>=MaxTk)
-      janet_panic("too many tokens");
-    n = ntk++;
-  }
+  assert(n == ntk-1);
   si = &is[n];
   si->prec = p;
   si->assoc = a;
@@ -827,13 +824,16 @@ parserules(int32_t nrules, const Janet *rules) {
   for (i = 0; i < nrules; i++) {
 
     if (!janet_checktype(rules[i], JANET_TUPLE))
-      janet_panicf("grammar rule must be a tuple, got %v", rules[i]);
+      janet_panicf("grammar rule must be a tuple, got %p", rules[i]);
 
     rule = janet_unwrap_tuple(rules[i]);
     nargs = janet_tuple_length(rule);
 
     if (nargs % 2 != 1)
       janet_panicf("rule needs an odd number of elements");
+
+    if (!janet_checktype(rule[0], JANET_SYMBOL))
+      janet_panicf("non terminals must be symbols, got %p", rule[0]);
 
     hd = findsy(rule[0], 1);
     if (sstart==S)
@@ -848,32 +848,30 @@ parserules(int32_t nrules, const Janet *rules) {
       r->act = janet_wrap_nil();
       p = r->rhs;
 
-      if (j != -1) {
-        if (!janet_checktype(rule[j], JANET_TUPLE))
-          janet_panicf("rule pattern must be a tuple, got %v", rule[j]);
-        
-        pat = janet_unwrap_tuple(rule[j]);
-        npat = janet_tuple_length(pat);
-        if (!janet_symeq(rule[j+1], "_"))
-          r->act = rule[j+1];
+      if (!janet_checktype(rule[j], JANET_TUPLE))
+        janet_panicf("rule pattern must be a tuple, got %p", rule[j]);
 
-        for (k = 0; k < npat; k++) {
-          if (janet_symeq(pat[k], "%prec")) {
-            if (k+1 == npat
-                || (s=findsy(pat[k+1], 0))>=ntk)
-              janet_panic("token expected after %prec");
-            r->prec = is[s].prec;
-            k++;
-            continue;
-          }
+      pat = janet_unwrap_tuple(rule[j]);
+      npat = janet_tuple_length(pat);
+      if (!janet_symeq(rule[j+1], "_"))
+        r->act = rule[j+1];
 
-          s = findsy(pat[k], 1);
-          *p++ = s;
-          if (s<ntk && is[s].prec>0)
-            r->prec = is[s].prec;
-          if (p-r->rhs >= MaxRhs-1)
-            janet_panic("production rule too long");
+      for (k = 0; k < npat; k++) {
+        if (janet_symeq(pat[k], "%prec")) {
+          if (k+1 == npat
+              || (s=findsy(pat[k+1], 0))>=ntk)
+            janet_panic("token expected after %prec");
+          r->prec = is[s].prec;
+          k++;
+          continue;
         }
+
+        s = findsy(pat[k], 1);
+        *p++ = s;
+        if (s<ntk && is[s].prec>0)
+          r->prec = is[s].prec;
+        if (p-r->rhs >= MaxRhs-1)
+          janet_panic("production rule too long");
       }
 
       *p = S;
@@ -893,7 +891,7 @@ static void
 parse(int32_t nstmts, const Janet *stmts)
 {
   const Janet *stmt;
-  int32_t prec, i, j, nelems;
+  int32_t prec, p, i, j, nelems;
   
   strcpy(is[0].name, "$");
   ntk = 1;
@@ -905,7 +903,7 @@ parse(int32_t nstmts, const Janet *stmts)
   for (i=0; i < nstmts; i++) {
     
     if (!janet_checktype(stmts[i], JANET_TUPLE) || janet_tuple_length(janet_unwrap_tuple(stmts[i])) <= 0)
-      janet_panicf("expected a statment tuple, got %v", stmts[i]);
+      janet_panicf("expected a statment tuple, got %p", stmts[i]);
 
     stmt  = janet_unwrap_tuple(stmts[i]);
     nelems = janet_tuple_length(stmt);
@@ -919,19 +917,22 @@ parse(int32_t nstmts, const Janet *stmts)
         janet_panic("start cannot specify a token");
     } else if (janet_symeq(stmt[0], "%token")) {
       for (j = 1; j < nelems; j++) {
-        addtok(stmt[j], 0, ANonassoc);
+        addtok(stmt[j], 0, ANone);
       }
     } else if (janet_symeq(stmt[0], "%left")) {
+      p = ++prec;
       for (j = 1; j < nelems; j++) {
-        addtok(stmt[j], ++prec, ALeft);
+        addtok(stmt[j], p, ALeft);
       }
     } else if (janet_symeq(stmt[0], "%right")) {
+      p = ++prec;
       for (j = 1; j < nelems; j++) {
-        addtok(stmt[j], ++prec, ARight);
+        addtok(stmt[j], p, ARight);
       }
     } else if (janet_symeq(stmt[0], "%nonassoc")) {
+      p = ++prec;
       for (j = 1; j < nelems; j++) {
-        addtok(stmt[j], ++prec, ANonassoc);
+        addtok(stmt[j], p, ANonassoc);
       }
     } else {
       parserules(nstmts-i, stmts+i);
