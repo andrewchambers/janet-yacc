@@ -19,14 +19,14 @@
   be a keyword.
   `
   [gram toks]
-  
-  (def tab 
+
+  (def tab
     (if (struct? gram)
       gram
       (compile gram)))
 
   (def yylex
-    (cond 
+    (cond
       (indexed? toks)
       (do
         (var idx -1)
@@ -34,7 +34,7 @@
       (fiber? toks)
       (fn yylex [] (resume toks))
       toks))
-  
+
   (def yyini (tab :yyini))
   (def yyntoks (tab :yyntoks))
   (def yyact (tab :yyact))
@@ -46,7 +46,7 @@
   (def yytrns (tab :yytrns))
   (def yychk (tab :yychk))
   (def yyr1 (tab :yyr1))
-  (def yyr2 (tab :yyr2)) 
+  (def yyr2 (tab :yyr2))
 
   (var r 0)
   (var h 0)
@@ -70,9 +70,9 @@
       (set yylval (yylex))
       (if yylval
         (set tk
-          (or (yytrns (yylval :kind))
-              (errorf "unknown token kind %m"
-                      (yylval :kind))))
+             (or (yytrns (yylval :kind))
+                 (errorf "unknown token kind %m"
+                         (yylval :kind))))
         (set tk 0)))
     (set n (+ n tk))
     (if (or (< n 0)
@@ -97,39 +97,38 @@
             (do-stack))))))
 
   (set do-stack
-    (fn
-      []
-      (set s n)
-      (array/push stk @{:state s :val yyval})
-      (do-loop)))
+       (fn
+         []
+         (set s n)
+         (array/push stk @{:state s :val yyval})
+         (do-loop)))
 
   (set do-reduce
-    (fn 
-      []
-      (def args @[])
-      (repeat (yyr1 r)
-        (array/push args ((array/pop stk) :val)))
-      (reverse! args)
-      (set h (yyr2 r))
-      (set s ((last stk) :state))
-      (set n (+ (yygdsp h) s))
+       (fn
+         []
+         (def args @[])
+         (repeat (yyr1 r)
+           (array/push args ((array/pop stk) :val)))
+         (reverse! args)
+         (set h (yyr2 r))
+         (set s ((last stk) :state))
+         (set n (+ (yygdsp h) s))
 
-      (if (or (< n 0)
-              (>= n (length yyact))
-              (not= (yychk n) (+ yyntoks h)))
-        (set n (yygdef h))
-        (set n (yyact n)))
+         (if (or (< n 0)
+                 (>= n (length yyact))
+                 (not= (yychk n) (+ yyntoks h)))
+           (set n (yygdef h))
+           (set n (yyact n)))
 
-      (def action (get yyfns r))
-      (cond
-        (= action :done)
-        [:ok (args 0)]
-        (= action nil)
-        (do-stack)
-        (do
-          (set yyval (action ;args))
-          (do-stack)))
-      ))
+         (def action (get yyfns r))
+         (cond
+           (= action :done)
+           [:ok (args 0)]
+           (= action nil)
+           (do-stack)
+           (do
+             (set yyval (action ;args))
+             (do-stack)))))
 
   (prompt :yyparse
-    (do-loop)))
+          (do-loop)))
