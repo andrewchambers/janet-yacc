@@ -2,7 +2,7 @@
 
 An implementation of yacc for the janet programming language.
 
-The implementation is based heavily on https://c9x.me/yacc/ .
+The implementation is based heavily on https://c9x.me/yacc/.
 
 Example:
 ```
@@ -45,3 +45,4 @@ Help with documentation and tests wanted :).
 Todo:
 
 - Function to convert parser state to an error message of some form.
+- Some sort of runtime debug tracing.
