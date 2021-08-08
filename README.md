@@ -40,3 +40,8 @@ Example:
 ```
 
 Help with documentation and tests wanted :).
+
+
+Todo:
+
+- Function to convert parser state to an error message of some form.
