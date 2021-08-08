@@ -1,3 +1,13 @@
+// An implementation of yacc based on
+// https://c9x.me/git/miniyacc.git/tree/yacc.c
+//
+// To stand any chance of understanding the implementation
+// you must read https://c9x.me/yacc/ .
+// Most code is unchanged, but the parser is now walking
+// janet data structures, we have also added a few new output
+// tables yyfns and yytrns now maps janet keywords to token numbers.
+
+#include <janet.h>
 
 #include <assert.h>
 #include <ctype.h>
@@ -33,7 +43,7 @@ enum {
 struct Rule {
   Sym lhs;
   Sym rhs[MaxRhs];
-  char *act;
+  Janet act;
   int actln;
   int prec;
 };
@@ -53,7 +63,6 @@ struct Info {
     ANonassoc
   } assoc;
   char name[IdntSz];
-  char type[IdntSz];
 };
 
 struct Term {
@@ -90,33 +99,13 @@ Row *gs;   /* goto table   [sym][state] */
 Sym sstart;/* start symbol */
 Item *ini; /* initial state */
 
+int dbgon;
 int srconf, rrconf;
 int actsz;
 int *act;
 int *chk;
 int *adsp;
 int *gdsp;
-
-FILE *fout;
-FILE *fgrm;
-
-static void
-die(char *s)
-{
-  fprintf(stderr, "%s\n", s);
-  exit(1);
-}
-
-static void *
-yalloc(size_t n, size_t o)
-{
-  void *p;
-
-  p = calloc(n, o);
-  if (!p)
-    die("out of memory");
-  return p;
-}
 
 static int
 rcmp(const void *a, const void *b)
@@ -262,7 +251,7 @@ iclose(Item *i)
         continue;
       r = rfind(s);
       if (!r)
-        die("some non-terminals are not defined");
+        janet_panic("some non-terminals are not defined");
       tszero(&t1.lk);
       first(&t1.lk, rem, &t->lk);
       m = smap[s-Sym0];
@@ -274,7 +263,7 @@ iclose(Item *i)
         smap[s-Sym0] = m;
         for (; r-rs<nrl && r->lhs==s; r++, m++) {
           if (m>=MaxTm)
-            die("too many terms in item");
+            janet_panic("too many terms in item");
           t1.rule = r;
           i->ts[m] = t1;
         }
@@ -353,13 +342,13 @@ stadd(Item **pi)
     *pi = i1;
     return chg;
   } else {
-    st = realloc(st, ++nst * sizeof st[0]);
+    st = janet_srealloc(st, ++nst * sizeof st[0]);
     if (!st)
-      die("out of memory");
+      janet_panic("out of memory");
     memmove(&st[hi+1], &st[hi], (nst-1 - hi) * sizeof st[0]);
-    i->gtbl = yalloc(nsy, sizeof i->gtbl[0]);
+    i->gtbl = janet_scalloc(nsy, sizeof i->gtbl[0]);
     i->dirty = 1;
-    i1 = yalloc(1, sizeof *i1);
+    i1 = janet_scalloc(1, sizeof *i1);
     *i1 = *i;
     *pi = st[hi] = i1;
     return 1;
@@ -406,13 +395,16 @@ stgen()
   } while (chg);
 }
 
+
+#define dbgprintf(...) janet_dynprintf("yydbg", stderr, __VA_ARGS__)
+
 static int
 resolve(Rule *r, Sym s, int st)
 {
   if (!r->prec || !is[s].prec) {
   conflict:
-    if (fgrm)
-      fprintf(fgrm, srs, st, is[s].name);
+    if (dbgon)
+      dbgprintf(srs, st, is[s].name);
     srconf++;
     return ARight;
   }
@@ -461,8 +453,8 @@ tblset(int *tbl, Item *i, Term *t)
       if (!tbl[s])
         act = ALeft;
       else if (tbl[s]<0) {
-        if (fgrm)
-          fprintf(fgrm, rrs, i->id-1, is[s].name);
+        if (dbgon)
+          dbgprintf(rrs, i->id-1, is[s].name);
         rrconf++;
         act = ARight;
       } else
@@ -521,44 +513,44 @@ stdump()
   Row *ar;
 
   for (r=rs; r-rs<nrl; r++) {
-    fprintf(fgrm, "\n%03d: %s ->", (int)(r-rs), is[r->lhs].name);
+    dbgprintf("\n%03d: %s ->", (int)(r-rs), is[r->lhs].name);
     for (s1=r->rhs; *s1!=S; s1++)
-      fprintf(fgrm, " %s", is[*s1].name);
+      dbgprintf(" %s", is[*s1].name);
   }
-  fprintf(fgrm, "\n");
+  dbgprintf("\n");
   for (m=0; m<nst; m++) {
-    fprintf(fgrm, "\nState %d:\n", m);
+    dbgprintf("\nState %d:\n", m);
     for (t=st[m]->ts; t-st[m]->ts<st[m]->nt; t++) {
       r = t->rule;
       d = t->dot;
       if (d==0 && t!=st[m]->ts)
         continue;
-      fprintf(fgrm, "  %s ->", is[r->lhs].name);
+      dbgprintf("  %s ->", is[r->lhs].name);
       for (s1=r->rhs; *s1!=S; s1++, d--)
-        fprintf(fgrm, " %s%s", d ? "" : ". ", is[*s1].name);
+        dbgprintf(" %s%s", d ? "" : ". ", is[*s1].name);
       if (!d)
-        fprintf(fgrm, " .");
-      fprintf(fgrm, "\n");
+        dbgprintf(" .");
+      dbgprintf("\n");
     }
-    fprintf(fgrm, "\n");
+    dbgprintf("\n");
     ar = &as[m];
     for (n=0; n<ntk; n++) {
       act = ar->t[n];
       if (!act)
         continue;
       if (act==-1)
-        fprintf(fgrm, "  %s error (nonassoc)\n", is[n].name);
+        dbgprintf("  %s error (nonassoc)\n", is[n].name);
       else if (act<0)
-        fprintf(fgrm, "  %s reduce with rule %d\n", is[n].name, Red(act));
+        dbgprintf("  %s reduce with rule %d\n", is[n].name, Red(act));
       else
-        fprintf(fgrm, "  %s shift and go to %d\n", is[n].name, act-1);
+        dbgprintf("  %s shift and go to %d\n", is[n].name, act-1);
     }
     if (ar->def != -1)
-      fprintf(fgrm, "  * reduce with rule %d\n", ar->def);
+      dbgprintf("  * reduce with rule %d\n", ar->def);
   }
-
-  fprintf(fgrm, "%d shift/reduce conflicts\n", srconf);
-  fprintf(fgrm, "%d reduce/reduce conflicts\n", rrconf);
+  dbgprintf("\n");
+  dbgprintf("%d shift/reduce conflicts\n", srconf);
+  dbgprintf("%d reduce/reduce conflicts\n", rrconf);
 }
 
 static void
@@ -570,12 +562,12 @@ tblgen()
 
   for (n=0; n<nst; n++)
     st[n]->id = n+1;
-  as = yalloc(nst, sizeof as[0]);
-  gs = yalloc(nsy-MaxTk, sizeof gs[0]);
+  as = janet_scalloc(nst, sizeof as[0]);
+  gs = janet_scalloc(nsy-MaxTk, sizeof gs[0]);
   /* fill action table */
   for (n=0; n<nst; n++) {
     r = &as[n];
-    r->t = yalloc(ntk, sizeof r->t[0]);
+    r->t = janet_scalloc(ntk, sizeof r->t[0]);
     for (i=st[n], m=0; m<i->nt; m++)
       tblset(r->t, i, &i->ts[m]);
     setdef(r, ntk, -1);
@@ -584,14 +576,14 @@ tblgen()
   /* fill goto table */
   for (n=MaxTk; n<nsy; n++) {
     r = &gs[n-MaxTk];
-    r->t = yalloc(nst, sizeof r->t[0]);
+    r->t = janet_scalloc(nst, sizeof r->t[0]);
     for (m=0; m<nst; m++)
       if (st[m]->gtbl[n])
         r->t[m] = st[m]->gtbl[n]->id;
     setdef(r, nst, nst+1);
   }
 
-  if (fgrm)
+  if (dbgon)
     stdump();
 }
 
@@ -608,10 +600,10 @@ actgen()
   int n, m, t, dsp, nnt;
 
   actsz = 0;
-  o = yalloc(nst+nsy, sizeof o[0]);
-  act = yalloc(nst*nsy, sizeof act[0]);
-  chk = yalloc(nst*nsy, sizeof chk[0]);
-  adsp = yalloc(nst, sizeof adsp[0]);
+  o = janet_scalloc(nst+nsy, sizeof o[0]);
+  act = janet_scalloc(nst*nsy, sizeof act[0]);
+  chk = janet_scalloc(nst*nsy, sizeof chk[0]);
+  adsp = janet_scalloc(nst, sizeof adsp[0]);
   for (n=0; n<nst*nsy; n++)
     chk[n] = -1;
   /* fill in actions */
@@ -645,7 +637,7 @@ actgen()
   }
   /* fill in gotos */
   nnt = nsy-MaxTk;
-  gdsp = yalloc(nnt, sizeof gdsp[0]);
+  gdsp = janet_scalloc(nnt, sizeof gdsp[0]);
   for (n=0; n<nnt; n++)
     o[n] = &gs[n];
   qsort(o, nnt, sizeof o[0], prcmp);
@@ -669,69 +661,118 @@ actgen()
           actsz = dsp+t+1;
       }
   }
-  free(o);
 }
 
 static void
-aout(char *name, int *t, int n)
+aout(JanetKV *sout, char *name, int *t, int n)
 {
+  Janet k, v, *tout;
   int i;
 
-  fprintf(fout, "short %s[] = {", name);
+  tout = janet_tuple_begin(n);
   for (i=0; i<n; i++) {
-    if (i % 10 == 0)
-      fprintf(fout, "\n");
-    fprintf(fout, "%4d", t[i]);
-    if (i != n-1)
-      fprintf(fout, ",");
+    tout[i] = janet_wrap_integer(t[i]);
   }
-  fprintf(fout, "\n};\n");
+  k = janet_ckeywordv(name);
+  v = janet_wrap_tuple(janet_tuple_end(tout));
+  janet_struct_put(sout, k, v);
 }
 
-static void
+static Janet
 tblout()
 {
-  int *o, n, m;
+  int *o, n;
+  Janet *yyfns;
+  JanetKV *sout, *yytrns;
 
-  fprintf(fout, "short yyini = %d;\n", ini->id-1);
-  fprintf(fout, "short yyntoks = %d;\n", ntk);
-  o = yalloc(nrl+nst+nsy, sizeof o[0]);
+  sout = janet_struct_begin(12);
+
+  janet_struct_put(
+    sout, 
+    janet_ckeywordv("yyini"),
+    janet_wrap_integer(ini->id-1)
+  );
+  janet_struct_put(
+    sout,
+    janet_ckeywordv("yyntoks"),
+    janet_wrap_integer(ntk)
+  );
+
+  o = janet_scalloc(nrl+nst+nsy, sizeof o[0]);
   for (n=0; n<nrl; n++)
     o[n] = slen(rs[n].rhs);
-  aout("yyr1", o, nrl);
+  aout(sout, "yyr1", o, nrl);
   for (n=0; n<nrl; n++)
     o[n] = rs[n].lhs-MaxTk;
-  aout("yyr2", o, nrl);
+  aout(sout, "yyr2", o, nrl);
   for (n=0; n<nst; n++)
     o[n] = as[n].def;
-  aout("yyadef", o, nst);
+  aout(sout, "yyadef", o, nst);
   for (n=0; n<nsy-MaxTk; n++) {
     o[n] = gs[n].def;
     assert(o[n]>0 || o[n]==-1);
     if (o[n]>0)
       o[n]--;
   }
-  aout("yygdef", o, nsy-MaxTk);
-  aout("yyadsp", adsp, nst);
-  aout("yygdsp", gdsp, nsy-MaxTk);
+  aout(sout, "yygdef", o, nsy-MaxTk);
+  aout(sout, "yyadsp", adsp, nst);
+  aout(sout, "yygdsp", gdsp, nsy-MaxTk);
   for (n=0; n<actsz; n++)
     if (act[n]>=0)
       act[n]--;
-  aout("yyact", act, actsz);
-  aout("yychk", chk, actsz);
-  free(o);
+  aout(sout, "yyact", act, actsz);
+  aout(sout, "yychk", chk, actsz);
+
+  yytrns = janet_struct_begin(ntk-1);
+  for (n=1; n<ntk; n++)
+    janet_struct_put(
+      yytrns,
+      janet_ckeywordv(is[n].name),
+      janet_wrap_integer(n)
+    );
+  janet_struct_put(
+    sout, 
+    janet_ckeywordv("yytrns"),
+    janet_wrap_struct(janet_struct_end(yytrns))
+  );
+
+  yyfns = janet_tuple_begin(nrl);
+  for (n=0; n<nrl; n++) {
+    yyfns[n] = rs[n].act;
+  }
+  janet_struct_put(
+    sout, 
+    janet_ckeywordv("yyfns"),
+    janet_wrap_tuple(janet_tuple_end(yyfns))
+  );
+
+  return janet_wrap_struct(janet_struct_end(sout));
 }
 
 static Sym
-findsy(char *name, int add)
+findsy(Janet v, int add)
 {
-  int n;
+  char *name;
+  int istok, n;
+
+  if (janet_checktype(v, JANET_SYMBOL)) {
+    istok = 0;
+    name = (char*)janet_unwrap_symbol(v);
+  } else if (janet_checktype(v, JANET_KEYWORD)) {
+    istok = 1;
+    name = (char*)janet_unwrap_keyword(v);
+  } else {
+    janet_panicf("tokens and non-terminals must be keywords and symbols respectively, got %v", v);
+  }
+
+  if (janet_string_length(name) >= IdntSz)
+    janet_panic("ident name too long");
 
   for (n=0; n<nsy; n++) {
     if (n == ntk) {
-      if (name[0]=='\'') {
+      if (istok) {
         if (ntk>=MaxTk)
-          die("too many tokens");
+          janet_panic("too many tokens");
         ntk++;
         strcpy(is[n].name, name);
         return n;
@@ -743,22 +784,177 @@ findsy(char *name, int add)
   }
   if (add) {
     if (nsy>=MaxTk+MaxNt)
-      die("too many non-terminals");
+      janet_panic("too many non-terminals");
     strcpy(is[nsy].name, name);
     return nsy++;
   } else
     return nsy;
 }
 
+static void
+addtok(Janet v, int p, int a) {
+  Info *si;
+  int n;
 
-int
-main(int ac, char *av[])
+  n = findsy(v, 0);
+  if (n>=MaxTk && n<nsy)
+    janet_panic("non-terminal redeclared as token");
+  if (n==nsy) {
+    if (ntk>=MaxTk)
+      janet_panic("too many tokens");
+    n = ntk++;
+  }
+  si = &is[n];
+  si->prec = p;
+  si->assoc = a;
+}
+
+static void
+parserules(int32_t nrules, const Janet *rules) {
+  const Janet *rule, *pat;
+  int32_t i, j, k, nargs, npat;
+
+  Sym hd, *p, s;
+  Rule *r;
+
+  if (nrules <= 0)
+    janet_panic("at least one rule is required");
+
+  for (i = 0; i < nrules; i++) {
+
+    if (!janet_checktype(rules[i], JANET_TUPLE))
+      janet_panicf("grammar rule must be a tuple, got %v", rules[i]);
+
+    rule = janet_unwrap_tuple(rules[i]);
+    nargs = janet_tuple_length(rule);
+
+    if (nargs % 2 != 1)
+      janet_panicf("rule needs an odd number of elements");
+
+    hd = findsy(rule[0], 1);
+    if (sstart==S)
+      sstart = hd;
+
+    for (j = 1; j < nargs; j += 2) {
+
+      if (nrl>=MaxRl-1)
+        janet_panic("too many rules");
+      r = &rs[nrl++];
+      r->lhs = hd;
+      r->act = janet_wrap_nil();
+      p = r->rhs;
+
+      if (j != -1) {
+        if (!janet_checktype(rule[j], JANET_TUPLE))
+          janet_panicf("rule pattern must be a tuple, got %v", rule[j]);
+        
+        pat = janet_unwrap_tuple(rule[j]);
+        npat = janet_tuple_length(pat);
+        if (!janet_symeq(rule[j+1], "_"))
+          r->act = rule[j+1];
+
+        for (k = 0; k < npat; k++) {
+          if (janet_symeq(pat[k], "%prec")) {
+            if (k+1 == npat
+                || (s=findsy(pat[k], 0))>=ntk)
+              janet_panic("token expected after %prec");
+            r->prec = is[s].prec;
+            k++;
+            continue;
+          }
+
+          s = findsy(pat[k], 1);
+          *p++ = s;
+          if (s<ntk && is[s].prec>0)
+            r->prec = is[s].prec;
+          if (p-r->rhs >= MaxRhs-1)
+            janet_panic("production rule too long");
+        }
+      }
+
+      *p = S;
+    }
+  }
+
+  r = &rs[nrl++];
+  r->lhs = Sym0;
+  r->rhs[0] = sstart;
+  r->rhs[1] = 0;
+  r->rhs[2] = S;
+  r->act = janet_ckeywordv("done");
+  qsort(rs, nrl, sizeof rs[0], rcmp);
+}
+
+static void
+parse(int32_t nstmts, const Janet *stmts)
 {
+  const Janet *stmt;
+  int32_t prec, i, j, nelems;
+  
+  strcpy(is[0].name, "$");
+  ntk = 1;
+  strcpy(is[Sym0].name, "@start");
+  nsy = MaxTk+1;
+  sstart = S;
+  prec = 0;
+
+  for (i=0; i < nstmts; i++) {
+    
+    if (!janet_checktype(stmts[i], JANET_TUPLE) || janet_tuple_length(janet_unwrap_tuple(stmts[i])) <= 0)
+      janet_panicf("expected a statment tuple, got %v", stmts[i]);
+
+    stmt  = janet_unwrap_tuple(stmts[i]);
+    nelems = janet_tuple_length(stmt);
+
+    if (janet_symeq(stmt[0], "%start")) {
+      if (nelems != 2 || !janet_checktype(stmt[1], JANET_SYMBOL))
+        janet_panicf("start expects a single symbol");
+
+      sstart = findsy(stmt[1], 1);
+      if (sstart<ntk)
+        janet_panic("start cannot specify a token");
+    } else if (janet_symeq(stmt[0], "%token")) {
+      for (j = 1; j < nelems; j++) {
+        addtok(stmt[j], 0, ANonassoc);
+      }
+    } else if (janet_symeq(stmt[0], "%left")) {
+      for (j = 1; j < nelems; j++) {
+        addtok(stmt[j], ++prec, ALeft);
+      }
+    } else if (janet_symeq(stmt[0], "%right")) {
+      for (j = 1; j < nelems; j++) {
+        addtok(stmt[j], ++prec, ARight);
+      }
+    } else if (janet_symeq(stmt[0], "%nonassoc")) {
+      for (j = 1; j < nelems; j++) {
+        addtok(stmt[j], ++prec, ANonassoc);
+      }
+    } else {
+      parserules(nstmts-i, stmts+i);
+      return;
+    }
+  }
+
+  janet_panic("expected rules after delcarations");
+}
+
+static Janet
+compile(int32_t argc, Janet *argv) {
+  janet_arity(argc, 0, 100000);
+  dbgon = !janet_checktype(janet_dyn("yydbg"), JANET_NIL);
+  parse(argc, argv);
   ginit();
   stgen();
   tblgen();
   actgen();
-  tblout();
+  return tblout();
+}
 
-  exit(0);
+static const JanetReg cfuns[] = {
+  {"compile", compile, NULL},
+  {NULL, NULL, NULL}
+};
+
+JANET_MODULE_ENTRY(JanetTable *env) {
+  janet_cfuns(env, "_yacc", cfuns);
 }
