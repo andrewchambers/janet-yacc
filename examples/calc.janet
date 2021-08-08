@@ -11,13 +11,13 @@
 (def lexer-peg
   ~{:main (some (choice :number :op))
     :number (cmt (capture (some (range "09"))) ,make-number-tok)
-    :op (cmt (capture (choice "*" "+" "-")) ,|{:kind (keyword $)})})
+    :op (cmt (capture (choice "*" "+" "-")) ,make-op-tok)})
 
 (defn lex
   [text]
   (peg/match lexer-peg text))
 
-# Define our  
+# Define our  grammar.
 
 (def calculator-grammar
   ~(yacc
