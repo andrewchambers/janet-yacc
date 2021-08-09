@@ -4,7 +4,7 @@ An implementation of yacc for the janet programming language.
 
 The implementation is based heavily on https://c9x.me/yacc/.
 
-Example:
+Example from ./examples/calc.janet:
 ```
 (import yacc)
 
@@ -14,36 +14,17 @@ Example:
   ~(yacc
      (%left :+ :-)
      (%nonassoc :*)
-     (expr (:num) ,|($0 :val)
+     (expr (:num) ,|(scan-number ($0 :text))
            (expr :+ expr) ,|(+ $0 $2)
            (expr :- expr) ,|(- $0 $2)
-           (expr :* expr) ,|(* $0 $2))))
+           (expr :* expr) ,|(* $0 $2)
+           (:lparen expr :rparen) ,(fn [_ $1 _] $1))))
 
-(def prog "1+2*3-4")
+(def parser (yacc/compile calculator-grammar))
 
-(def tokens (lex prog))
-
-# Uncomment to see debug output.
-# (setdyn :yydbg stderr)
-
-# Optionally precompile.
-#(def yacc-tables
-#  (yacc/compile calculator-grammar))
-
-(def result
-  (match (yacc/parse calculator-grammar tokens)
-    [:syntax-error _] (error "syntax error")
-    [:ok result] result))
-
-(printf "%s is %d" prog result)
-
+(yacc/parse tokens)
 ```
-
-Help with documentation and tests wanted :).
-
 
 Todo:
 
-- Function to convert parser state to an error message of some form.
 - Some sort of runtime debug tracing.
-- Make test cases out of the miniyacc C and ocaml grammars.

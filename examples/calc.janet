@@ -1,48 +1,48 @@
-(import ../yacc)
+(import yacc)
+(import ./peglex)
 
-# Define a lexer for our calculator using janet peg.
+(def lexer-grammar
+  ~[[:ws :s+] # Automatically filtered by peglex
+    [:+ "+"]
+    [:- "-"]
+    [:* "*"]
+    [:/ "/"]
+    [:lparen "("]
+    [:rparen ")"]
+    [:num :d+]])
 
-(defn make-number-tok [text]
-  {:kind :num :val (scan-number text)})
-
-(defn make-op-tok [text]
-  {:kind (keyword text)})
-
-(def lexer-peg
-  ~{:main (some (choice :number :op))
-    :number (cmt (capture (some (range "09"))) ,make-number-tok)
-    :op (cmt (capture (choice "*" "+" "-")) ,make-op-tok)})
-
-(defn lex
-  [text]
-  (peg/match lexer-peg text))
-
-# Define our yacc grammar, it operates on the tokens produced by our lexer above.
-# To understand the example, it will help to make yourself familiar with yacc by reading
-# examples for other yacc tools.
-#
-# In our yacc non-terminals are represented by symbols and terminal tokens are represented
-# by :keywords.
+(def lexer (peglex/compile lexer-grammar))
 
 (def calculator-grammar
   ~(yacc
+     (%token :lex-error)
      (%left :+ :-)
      (%nonassoc :*)
-     (expr (:num) ,|($0 :val)
+     (expr (:num) ,|(scan-number ($0 :text))
            (expr :+ expr) ,|(+ $0 $2)
            (expr :- expr) ,|(- $0 $2)
-           (expr :* expr) ,|(* $0 $2))))
+           (expr :* expr) ,|(* $0 $2)
+           (:lparen expr :rparen) ,(fn [_ $1 _] $1))))
 
-(def prog "1+2*3-4")
+(def parser (yacc/compile calculator-grammar))
 
-(def tokens (lex prog))
+(defn eval
+  [prog]
+  (def tokens (peglex/lex lexer prog))
+  (def result
+    (match (yacc/parse parser tokens)
+      [:syntax-error tok] (errorf "syntax error: unexpected token '%p' at col %d"
+                                  (tok :kind) ((tok :span) 0))
+      [:ok result] result)))
 
-# Uncomment to see debug state.
-# (setdyn :yydbg stderr)
+(defn repl
+  []
+  (while true
+    (if-let [buf (getline)
+             prog (string buf)]
+      (printf "%d" (eval prog))
+      (break))))
 
-(def result
-  (match (yacc/parse calculator-grammar tokens)
-    [:syntax-error _] (error "syntax error")
-    [:ok result] result))
-
-(printf "%s is %d" prog result)
+(defn main
+  [&]
+  (repl))

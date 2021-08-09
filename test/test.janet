@@ -1,4 +1,4 @@
-(import ../yacc)
+(import yacc)
 
 # Test program for original miniyacc.
 #

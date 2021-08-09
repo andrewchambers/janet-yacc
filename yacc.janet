@@ -4,10 +4,10 @@
   `
   Precompile a yacc grammar into the runtime tables.
   `
-  [g]
-  (unless (= (g 0) 'yacc)
-    (errorf "%m is not a valid grammar" g))
-  (_yacc/compile ;(slice g 1)))
+  [grammar]
+  (unless (= (grammar 0) 'yacc)
+    (errorf "%m is not a valid grammar" grammar))
+  (_yacc/compile ;(slice grammar 1)))
 
 (defn parse
   `
@@ -18,12 +18,7 @@
   of tokens. Each token must have a :kind field which must
   be a keyword.
   `
-  [gram toks]
-
-  (def tab
-    (if (struct? gram)
-      gram
-      (compile gram)))
+  [tab toks]
 
   (def yylex
     (cond
@@ -60,7 +55,7 @@
 
   (defn syntax-error
     []
-    (return :yyparse [:syntax-error {:yylval yylval}]))
+    (return :yyparse [:syntax-error yylval]))
 
   (var do-reduce nil)
   (var do-stack nil)
@@ -75,8 +70,7 @@
       (if yylval
         (set tk
              (or (yytrns (yylval :kind))
-                 (errorf "unknown token kind %m"
-                         (yylval :kind))))
+                 (syntax-error)))
         (set tk 0)))
     (set n (+ n tk))
     (if (or (< n 0)
