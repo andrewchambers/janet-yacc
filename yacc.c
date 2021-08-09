@@ -731,7 +731,7 @@ tblout()
   for (n=1; n<ntk; n++)
     janet_struct_put(
       trns,
-      janet_ckeywordv(is[n].name),
+      janet_ckeywordv(is[n].name+1),
       janet_wrap_integer(n)
     );
   janet_struct_put(
@@ -756,7 +756,7 @@ tblout()
 static Sym
 findsy(Janet v, int add)
 {
-  char *name;
+  char *name, namelen;
   int istok, n;
 
   if (janet_checktype(v, JANET_SYMBOL)) {
@@ -769,23 +769,27 @@ findsy(Janet v, int add)
     janet_panicf("tokens and non-terminals must be keywords and symbols respectively, got %p", v);
   }
 
-  if (janet_string_length(name) >= IdntSz)
-    janet_panic("ident name too long");
+  namelen = janet_string_length(name);
+  // -1 gives us space for null terminator and :.
+  if (namelen-2 >= IdntSz)
+    janet_panicf("token/non terminal name '%v' too long", v);
 
-  for (n=0; n<nsy; n++) {
-    if (n == ntk) {
-      if (istok) {
-        if (ntk>=MaxTk)
-          janet_panic("too many tokens");
-        ntk++;
-        strcpy(is[n].name, name);
+  if (istok) {
+    for (n=0; n<ntk; n++)
+      if (strcmp(is[n].name+1, name)==0)
         return n;
-      }
-      n = MaxTk;
-    }
+    if (ntk>=MaxTk)
+      janet_panic("too many tokens");
+    ntk++;
+    is[n].name[0] = ':';
+    strcpy(is[n].name+1, name);
+    return n;
+  }
+
+  for (n=MaxTk; n<nsy; n++)
     if (strcmp(is[n].name, name)==0)
       return n;
-  }
+
   if (add) {
     if (nsy>=MaxTk+MaxNt)
       janet_panic("too many non-terminals");
@@ -804,7 +808,9 @@ addtok(Janet v, int p, int a) {
     janet_panicf("tokens must be keywords, got %v", v);
 
   n = findsy(v, 0);
-  assert(n == ntk-1);
+  if (n < ntk-1)
+    janet_panicf("token %v redeclared", v);
+
   si = &is[n];
   si->prec = p;
   si->assoc = a;
