@@ -18,7 +18,8 @@
      (%token :lex-error)
      (%left :+ :-)
      (%nonassoc :*)
-     (expr (:num) ,|(scan-number ($0 :text))
+     (expr () _
+           (:num) ,|(scan-number ($0 :text))
            (expr :+ expr) ,|(+ $0 $2)
            (expr :- expr) ,|(- $0 $2)
            (expr :* expr) ,|(* $0 $2)
@@ -39,8 +40,9 @@
   []
   (while true
     (if-let [buf (getline)
-             prog (string buf)]
-      (printf "%d" (eval prog))
+             prog (string buf)
+             result (eval prog)]
+      (printf "%d" result)
       (break))))
 
 (defn main
