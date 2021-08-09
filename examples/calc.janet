@@ -15,7 +15,6 @@
 
 (def calculator-grammar
   ~(yacc
-     (%token :lex-error)
      (%left :+ :-)
      (%nonassoc :*)
      (expr () _
