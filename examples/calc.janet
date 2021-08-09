@@ -23,6 +23,7 @@
 #
 # In our yacc non-terminals are represented by symbols and terminal tokens are represented
 # by :keywords.
+
 (def calculator-grammar
   ~(yacc
      (%left :+ :-)

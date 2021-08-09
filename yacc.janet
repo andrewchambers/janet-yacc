@@ -58,6 +58,10 @@
 
   (def stk @[@{:state yyini :val yyval}])
 
+  (defn syntax-error
+    []
+    (return :yyparse [:syntax-error {:yylval yylval}]))
+
   (var do-reduce nil)
   (var do-stack nil)
 
@@ -81,12 +85,12 @@
       (do
         (set r (yyadef s))
         (when (< r 0)
-          (return :yyparse [:syntax-error {:yylval yylval :stack stk}]))
+          (syntax-error))
         (do-reduce))
       (do
         (set n (yyact n))
         (when (= n -1)
-          (return :yyparse [:syntax-error stk]))
+          (syntax-error))
         (if (< n 0)
           (do
             (set r (- (+ n 2)))
