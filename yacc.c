@@ -117,9 +117,9 @@ TL int *gdsp;
 static void
 reset()
 {
-  i0 = janet_scalloc(sizeof(Item), 1);
-  rs = janet_scalloc(sizeof(Rule), MaxRl);
-  is = janet_scalloc(sizeof(Info), MaxTk+MaxNt);
+  i0 = janet_scalloc(1, sizeof(Item));
+  rs = janet_scalloc(MaxRl, sizeof(Rule));
+  is = janet_scalloc(MaxTk+MaxNt, sizeof(Info));
   nrl = 0;
   nsy = 0;
   nst = 0;
