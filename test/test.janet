@@ -35,7 +35,7 @@
        (a :add a) _
        (a :sub a) _
        (a :mul a) _
-       (sub a %prec :umin) _
+       (:sub a %prec :umin) _
        (:lparen a :rparen) _)))
 
 (def dbg-output @"")
@@ -47,6 +47,7 @@
     (yacc/compile grammar)))
 
 # (pp tabs)
+# (print dbg-output)
 
 (assert (= (tabs :yyr1) [
   2   0   2   1   3   3   3   2   3
@@ -65,25 +66,34 @@
  -1   1   3
 ]))
 
-# (pp (tabs :yyadsp))
-#(assert (= (tabs :yyadsp)  [
-#  -8   0  -8   6  -8  -3  -3  -2  -8   3
-#  12  12  12  12  12  -8
-#]))
+(assert (= (tabs :yyadsp)  [
+  -8   0  -8   6  -8  -3  -3  -2  -8   3
+  12  12  12  12  12  -8
+]))
 
 (assert (= (tabs :yygdsp)  [
  -16 -16   8
 ]))
 
-#(pp (tabs :yyact))
-#(assert (= (tabs :yyact)  [
-#   2   4  14  12  -1  13  15  10  11  12
-#  10  11  12   4  14  -1  -1  13   5   6
-#   7   8   9
-#]))
+(assert (= (tabs :yyact)  [
+   2   4  14  12  -1  13  15  10  11  12
+  10  11  12   4  14  -1  -1  13   5   6
+   7   8   9
+]))
 
-#(assert (= (tabs :yychk)  [
-#   0   1   2   6   6   5   3   4   5   6
-#   4   5   6   1   2  -1  -1   5  10  10
-#  10  10  10
-#]))
+(assert (= (tabs :yychk)  [
+   0   1   2   6   6   5   3   4   5   6
+   4   5   6   1   2  -1  -1   5  10  10
+  10  10  10
+]))
+
+(do
+  (def [ok e]
+    (protect
+      (yacc/compile
+        ~(yacc
+           (%token :foo)
+           (s (:foo) _)))))
+  (assert (not ok))
+  (assert (string/find e "redeclared")))
+
