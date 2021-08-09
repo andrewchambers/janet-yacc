@@ -122,10 +122,8 @@
          (cond
            (= action :done)
            [:ok (args 0)]
-           (= action nil)
-           (do-stack)
            (do
-             (set yyval (action ;args))
+             (set yyval (and action (action ;args)))
              (do-stack)))))
 
   (prompt :yyparse

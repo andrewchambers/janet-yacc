@@ -1,6 +1,7 @@
 (import yacc)
 (import ./peglex)
 
+
 (def lexer-grammar
   ~[[:ws :s+] # Automatically filtered by peglex
     [:+ "+"]
@@ -19,11 +20,12 @@
      (%left :* :/)
      (prog () _
            (expr) ,|$0)
-     (expr (:num) ,|(scan-number ($0 :text))
+     (expr (:num) ,|(int/s64 ($0 :text))
            (expr :+ expr) ,|(+ $0 $2)
            (expr :- expr) ,|(- $0 $2)
            (expr :* expr) ,|(* $0 $2)
            (expr :/ expr) ,|(/ $0 $2)
+           (:- expr) ,|(- $1)
            (:lparen expr :rparen) ,(fn [_ $1 _] $1))))
 
 (def parser (yacc/compile calculator-grammar))
@@ -43,7 +45,7 @@
     (if-let [buf (getline)
              prog (string buf)
              result (eval prog)]
-      (printf "%d" result)
+      (print (string result))
       (break))))
 
 (defn main
