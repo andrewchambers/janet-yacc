@@ -24,9 +24,9 @@ Example from ./examples/calc.janet:
            (:- expr) ,|(- $1)
            (:lparen expr :rparen) ,(fn [_ $1 _] $1))))
 
-(def parser (yacc/compile calculator-grammar))
+(def parser-tables (yacc/compile calculator-grammar))
 
-(yacc/parse tokens)
+(yacc/parse parser-tables tokens)
 ```
 
 Todo:
