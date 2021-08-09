@@ -16,12 +16,14 @@
 (def calculator-grammar
   ~(yacc
      (%left :+ :-)
-     (%nonassoc :*)
-     (expr () _
-           (:num) ,|(scan-number ($0 :text))
+     (%left :* :/)
+     (prog () _
+           (expr) ,|$0)
+     (expr (:num) ,|(scan-number ($0 :text))
            (expr :+ expr) ,|(+ $0 $2)
            (expr :- expr) ,|(- $0 $2)
            (expr :* expr) ,|(* $0 $2)
+           (expr :/ expr) ,|(/ $0 $2)
            (:lparen expr :rparen) ,(fn [_ $1 _] $1))))
 
 (def parser (yacc/compile calculator-grammar))
@@ -31,8 +33,8 @@
   (def tokens (peglex/lex lexer prog))
   (def result
     (match (yacc/parse parser tokens)
-      [:syntax-error tok] (errorf "syntax error: unexpected token '%p' at col %d"
-                                  (tok :kind) ((tok :span) 0))
+      [:syntax-error tok] (errorf "syntax error: unexpected token '%s' at col %d"
+                                  (string (tok :kind)) ((tok :span) 0))
       [:ok result] result)))
 
 (defn repl
