@@ -86,14 +86,3 @@
    4   5   6   1   2  -1  -1   5  10  10
   10  10  10
 ]))
-
-(do
-  (def [ok e]
-    (protect
-      (yacc/compile
-        ~(yacc
-           (%token :foo)
-           (s (:foo) _)))))
-  (assert (not ok))
-  (assert (string/find e "redeclared")))
-

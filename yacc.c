@@ -92,24 +92,53 @@ struct Row {
 static char srs[] = "shift/reduce conflict state %d token %s\n";
 static char rrs[] = "reduce/reduce conflict state %d token %s\n";
 
-Item i0; /* temporary item */
+#define TL JANET_THREAD_LOCAL
 
-int nrl, nsy, nst, ntk;
-Rule rs[MaxRl]; /* grammar rules (ordered, rcmp) */
-Info is[MaxTk+MaxNt]; /* symbol information */
-Item **st; /* LALR(1) states (ordered, icmp) */
-Row *as;   /* action table [state][tok] */
-Row *gs;   /* goto table   [sym][state] */
-Sym sstart;/* start symbol */
-Item *ini; /* initial state */
+TL Item *i0; /* temporary item */
+TL Rule *rs; /* grammar rules (ordered, rcmp) */
+TL Info *is; /* symbol information */
+TL int nrl, nsy, nst, ntk;
+TL Item **st; /* LALR(1) states (ordered, icmp) */
+TL Row *as;   /* action table [state][tok] */
+TL Row *gs;   /* goto table   [sym][state] */
+TL Sym sstart;/* start symbol */
+TL Item *ini; /* initial state */
 
-int dbgon;
-int srconf, rrconf;
-int actsz;
-int *act;
-int *chk;
-int *adsp;
-int *gdsp;
+TL int dbgon;
+TL int srconf, rrconf;
+TL int actsz;
+TL int *act;
+TL int *chk;
+TL int *adsp;
+TL int *gdsp;
+
+#undef TL
+
+static void
+reset()
+{
+  i0 = janet_scalloc(sizeof(Item), 1);
+  rs = janet_scalloc(sizeof(Rule), MaxRl);
+  is = janet_scalloc(sizeof(Info), MaxTk+MaxNt);
+  nrl = 0;
+  nsy = 0;
+  nst = 0;
+  ntk = 0;
+  st = 0; 
+  as = 0;
+  gs = 0;
+  sstart = 0;
+  ini = 0;
+  dbgon = 0;
+  srconf = 0;
+  rrconf = 0;
+  actsz = 0;
+  act = 0;
+  chk = 0;
+  adsp = 0;
+  gdsp = 0;
+}
+
 
 static int
 rcmp(const void *a, const void *b)
@@ -284,15 +313,15 @@ igoto(Item *i, Sym s)
   Term *t, *t1;
   int n;
 
-  i0.nt = 0;
+  i0->nt = 0;
   for (n=0, t=i->ts; n<i->nt; n++, t++) {
     if (t->rule->rhs[t->dot] != s)
       continue;
-    t1 = &i0.ts[i0.nt++];
+    t1 = &i0->ts[i0->nt++];
     *t1 = *t;
     t1->dot++;
   }
-  qsort(i0.ts, i0.nt, sizeof i0.ts[0], tcmpv);
+  qsort(i0->ts, i0->nt, sizeof i0->ts[0], tcmpv);
 }
 
 static int
@@ -368,14 +397,14 @@ stgen()
   Term tini;
   int n, chg;
 
-  ini = &i0;
+  ini = i0;
   r = rfind(Sym0);
   tini.rule = r;
   tini.dot = 0;
   tszero(&tini.lk);
   SetBit(tini.lk.t, 0);
-  i0.nt = 0;
-  i0.ts[i0.nt++] = tini;
+  i0->nt = 0;
+  i0->ts[i0->nt++] = tini;
   stadd(&ini);
   do {
     chg = 0;
@@ -387,7 +416,7 @@ stgen()
       iclose(i);
       for (s=0; s<nsy; s++) {
         igoto(i, s);
-        i1 = &i0;
+        i1 = i0;
         if (!i1->nt) {
           i->gtbl[s] = 0;
           continue;
@@ -803,14 +832,9 @@ static void
 addtok(Janet v, int p, int a) {
   Info *si;
   int n;
-
   if (!janet_checktype(v, JANET_KEYWORD))
     janet_panicf("tokens must be keywords, got %v", v);
-
   n = findsy(v, 0);
-  if (n < ntk-1)
-    janet_panicf("token %v redeclared", v);
-
   si = &is[n];
   si->prec = p;
   si->assoc = a;
@@ -952,6 +976,7 @@ parse(int32_t nstmts, const Janet *stmts)
 static Janet
 compile(int32_t argc, Janet *argv) {
   janet_arity(argc, 0, 100000);
+  reset();
   dbgon = !janet_checktype(janet_dyn("yydbg"), JANET_NIL);
   parse(argc, argv);
   ginit();
