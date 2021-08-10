@@ -17,6 +17,13 @@
   toks can be a function, a generator, an array or tuple
   of tokens. Each token must have a :kind field which must
   be a keyword.
+
+  returns:
+
+  [:ok result]
+  [:syntax-error cur-tok lookahead-tok]
+
+  lookahead-tok may be nil at eof.
   `
   [tab toks]
 
@@ -49,13 +56,14 @@
   (var s yyini)
   (var tk -1)
   (var yyval nil)
+  (var yyplval nil)
   (var yylval nil)
 
   (def stk @[@{:state yyini :val yyval}])
 
   (defn syntax-error
     []
-    (return :yyparse [:syntax-error yylval]))
+    (return :yyparse [:syntax-error yyplval yylval]))
 
   (var do-reduce nil)
   (var do-stack nil)
@@ -66,6 +74,7 @@
     (set n (yyadsp s))
     (when (and (< tk 0)
                (> n (- yyntoks)))
+      (set yyplval yylval)
       (set yylval (yylex))
       (if yylval
         (set tk

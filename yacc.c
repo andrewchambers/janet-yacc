@@ -428,8 +428,7 @@ stgen()
   } while (chg);
 }
 
-
-#define dbgprintf(...) janet_dynprintf("yydbg", stderr, __VA_ARGS__)
+#define dbgprintf(...) janet_dynprintf("yydebug", stderr, __VA_ARGS__)
 
 static int
 resolve(Rule *r, Sym s, int st)
@@ -977,7 +976,7 @@ static Janet
 compile(int32_t argc, Janet *argv) {
   janet_arity(argc, 0, 100000);
   reset();
-  dbgon = !janet_checktype(janet_dyn("yydbg"), JANET_NIL);
+  dbgon = !janet_checktype(janet_dyn("yydebug"), JANET_NIL);
   parse(argc, argv);
   ginit();
   stgen();

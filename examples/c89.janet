@@ -344,7 +344,7 @@
 (def dbg-output @"")
 
 (def yacc-tables 
-  (with-dyns [:yydbg dbg-output]
+  (with-dyns [:yydebug dbg-output]
     (yacc/compile c89-grammar)))
 
 #(print dbg-output)

@@ -33,11 +33,14 @@
 (defn eval
   [prog]
   (def tokens (peglex/lex lexer prog))
-  (def result
-    (match (yacc/parse parser tokens)
-      [:syntax-error tok] (errorf "syntax error: unexpected token '%s' at col %d"
-                                  (string (tok :kind)) ((tok :span) 0))
-      [:ok result] result)))
+  (match (yacc/parse parser tokens)
+    [:syntax-error tok nil]
+    (errorf "syntax error: unexpected end of file after token '%s' ending at col %d"
+            (string (tok :kind)) ((tok :span) 1))
+    [:syntax-error _ tok]
+    (errorf "syntax error: unexpected token '%s' at col %d"
+            (string (tok :kind)) ((tok :span) 0))
+    [:ok result]  result))
 
 (defn repl
   []
