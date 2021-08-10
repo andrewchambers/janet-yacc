@@ -28,12 +28,12 @@
            (:- expr) ,|(- $1)
            (:lparen expr :rparen) ,(fn [_ $1 _] $1))))
 
-(def parser (yacc/compile calculator-grammar))
+(def parser-tables (yacc/compile calculator-grammar))
 
 (defn eval
   [prog]
   (def tokens (peglex/lex lexer prog))
-  (match (yacc/parse parser tokens)
+  (match (yacc/parse parser-tables tokens)
     [:syntax-error tok nil]
     (errorf "syntax error: unexpected end of file after token '%s' ending at col %d"
             (string (tok :kind)) ((tok :span) 1))
