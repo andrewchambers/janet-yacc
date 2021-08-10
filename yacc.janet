@@ -50,14 +50,13 @@
   (var s yyini)
   (var tk -1)
   (var yyval nil)
-  (var yyplval nil)
   (var yylval nil)
 
   (def stk @[@{:state yyini :val yyval}])
 
   (defn syntax-error
     []
-    (return :yyparse [:syntax-error yyplval yylval]))
+    (return :yyparse [:syntax-error yylval]))
 
   (def yylex
     (cond
@@ -78,7 +77,6 @@
     (set n (yyadsp s))
     (when (and (< tk 0)
                (> n (- yyntoks)))
-      (set yyplval yylval)
       (set yylval (yylex))
       (if yylval
         (set tk
