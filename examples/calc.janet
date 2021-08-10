@@ -53,4 +53,6 @@
 
 (defn main
   [&]
+  (when (os/getenv "YYDEBUG")
+    (setdyn :yydebug stderr))
   (repl))

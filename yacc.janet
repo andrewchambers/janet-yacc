@@ -9,6 +9,9 @@
     (errorf "%m is not a valid grammar" grammar))
   (_yacc/compile ;(slice grammar 1)))
 
+(defmacro- yydebugf [& args]
+  ~(when yydebug (with-dyns [:err (dyn :yydebug)] ,(tuple 'eprintf ;args))))
+
 (defn parse
   `
   Parse a function using a given yacc grammar
@@ -27,16 +30,7 @@
   `
   [tab toks]
 
-  (def yylex
-    (cond
-      (indexed? toks)
-      (do
-        (var idx -1)
-        (fn yylex [] (get toks (++ idx))))
-      (fiber? toks)
-      (fn yylex [] (resume toks))
-      toks))
-
+  (def yydebug (not (nil? (dyn :yydebug))))
   (def yyini (tab :yyini))
   (def yyntoks (tab :yyntoks))
   (def yyact (tab :yyact))
@@ -64,6 +58,16 @@
   (defn syntax-error
     []
     (return :yyparse [:syntax-error yyplval yylval]))
+
+  (def yylex
+    (cond
+      (indexed? toks)
+      (do
+        (var idx -1)
+        (fn yylex [] (get toks (++ idx))))
+      (fiber? toks)
+      (fn yylex [] (resume toks))
+      toks))
 
   (var do-reduce nil)
   (var do-stack nil)
@@ -108,6 +112,7 @@
          []
          (set s n)
          (array/push stk @{:state s :val yyval})
+         (yydebugf "shift: %p" yyval)
          (do-loop)))
 
   (set do-reduce
@@ -128,6 +133,7 @@
            (set n (yyact n)))
 
          (def action (get yyfns r))
+         (yydebugf "reduce: %p" args)
          (cond
            (= action :done)
            [:ok (args 0)]
